@@ -1,0 +1,264 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState } from "react";
+import { Guest, RsvpStatus, EntryType } from "../types";
+import { Search, Calendar, Filter, X, Edit, Trash2 } from "lucide-react";
+
+interface ReservationsViewProps {
+  guests: Guest[];
+  onEditGuest: (guest: Guest) => void;
+  onDeleteGuest: (id: string) => void;
+}
+
+export default function ReservationsView({ guests, onEditGuest, onDeleteGuest }: ReservationsViewProps) {
+  const getTableIcon = (tableName: string) => {
+    try {
+      const cachedTables = localStorage.getItem("guest_rsvp_mngr_tables");
+      if (cachedTables) {
+        const parsed = JSON.parse(cachedTables);
+        const match = parsed.find((t: any) => t.name === tableName);
+        if (match && match.icon) return match.icon;
+      }
+    } catch (e) {}
+    return "🔥";
+  };
+
+  // Filters State
+  const [query, setQuery] = useState("");
+  const [filterDate, setFilterDate] = useState("");
+  const [filterType, setFilterType] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<string>("");
+
+  // Clear filters handler
+  const handleClearFilters = () => {
+    setQuery("");
+    setFilterDate("");
+    setFilterType("");
+    setFilterStatus("");
+  };
+
+  // Filter logic matching the HTML script closely
+  const filteredGuests = guests.filter(g => {
+    const matchesDate = !filterDate || g.date === filterDate;
+    const matchesType = !filterType || g.type === filterType;
+    const matchesStatus = !filterStatus || g.status === filterStatus;
+
+    const matchesQuery = !query || 
+      g.name.toLowerCase().includes(query.toLowerCase()) || 
+      (g.phone && String(g.phone).toLowerCase().includes(query.toLowerCase()));
+
+    return matchesDate && matchesType && matchesStatus && matchesQuery;
+  });
+
+  const totalPax = filteredGuests.reduce((sum, g) => sum + (g.pax || 0), 0);
+
+  const getStatusBadgeClass = (status: RsvpStatus) => {
+    switch (status) {
+      case RsvpStatus.CONFIRMED:
+        return "bg-emerald-50 text-emerald-800 border border-emerald-200";
+      case RsvpStatus.SEATED:
+        return "bg-blue-50 text-blue-800 border border-blue-200";
+      case RsvpStatus.PENDING:
+        return "bg-amber-50 text-amber-800 border border-amber-200";
+      case RsvpStatus.NO_SHOW:
+        return "bg-orange-50 text-orange-850 border border-orange-200";
+      case RsvpStatus.CANCELLED:
+        return "bg-rose-50 text-rose-800 border border-rose-200";
+      default:
+        return "bg-slate-50 text-slate-800 border border-slate-200";
+    }
+  };
+
+  const getTypeBadgeClass = (type: EntryType) => {
+    return type === EntryType.WALK_IN
+      ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+      : "bg-indigo-50 text-indigo-700 border border-indigo-100";
+  };
+
+  return (
+    <div id="reservations-manager-view" className="space-y-6 animate-fadeIn">
+      {/* Title */}
+      <div>
+        <h2 className="font-serif text-3xl font-bold text-navy tracking-tight">
+          All Guest Reservations
+        </h2>
+        <p className="text-sm text-[#4b5c73] mt-1 font-medium">
+          Search, filter, edit, or remove reservations across all past and future records.
+        </p>
+      </div>
+
+      {/* Structured Card container */}
+      <div className="bg-white rounded-3xl border border-gray-150 overflow-hidden shadow-xs">
+        {/* Filters Top rail */}
+        <div className="p-6 bg-slate-50/50 border-b border-gray-150 flex flex-wrap gap-4 items-center justify-between">
+          <div className="flex-1 min-w-[240px] relative">
+            <Search className="absolute left-4 top-3.5 w-4 h-4 text-[#8a9ab5]" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search guest list in real-time by name or phone number..."
+              className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-full text-xs text-navy placeholder-[#8a9ab5] focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-3 items-center">
+            {/* Date filter input */}
+            <div className="relative">
+              <Calendar className="absolute left-3.5 top-3 w-4 h-4 text-[#8a9ab5] pointer-events-none" />
+              <input
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="pl-10 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-xs text-navy focus:outline-none focus:ring-1 focus:ring-gold"
+              />
+            </div>
+
+            {/* Type selector */}
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-xs text-navy font-semibold focus:outline-none focus:ring-1 focus:ring-gold"
+            >
+              <option value="">All Types</option>
+              <option value={EntryType.RESERVATION}>Reservation</option>
+              <option value={EntryType.WALK_IN}>Walk-In</option>
+            </select>
+
+            {/* Status selector */}
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-xs text-navy font-semibold focus:outline-none focus:ring-1 focus:ring-gold"
+            >
+              <option value="">All Statuses</option>
+              <option value={RsvpStatus.CONFIRMED}>Confirmed</option>
+              <option value={RsvpStatus.SEATED}>Seated</option>
+              <option value={RsvpStatus.PENDING}>Pending</option>
+              <option value={RsvpStatus.NO_SHOW}>No-Show</option>
+              <option value={RsvpStatus.CANCELLED}>Cancelled</option>
+            </select>
+
+            {/* Clear button */}
+            {(query || filterDate || filterType || filterStatus) && (
+              <button
+                onClick={handleClearFilters}
+                className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl text-xs text-navy-soft font-bold flex items-center gap-1.5 transition"
+              >
+                <X className="w-3.5 h-3.5" />
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Results summary band indicator */}
+        <div className="px-6 py-3 bg-gold-pale/50 border-b border-gray-150 text-xs font-semibold text-gold flex justify-between">
+          <span>Showing {filteredGuests.length} of {guests.length} matches</span>
+          <span>Cumulative headcount: {totalPax} guests (pax)</span>
+        </div>
+
+        {/* Guest Listings Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-navy text-white font-semibold uppercase tracking-wider text-[10px]">
+                <th className="py-4 px-5 w-12 text-center">#</th>
+                <th className="py-4 px-5">Name</th>
+                <th className="py-4 px-5">Phone</th>
+                <th className="py-4 px-5">Type</th>
+                <th className="py-4 px-5">Date</th>
+                <th className="py-4 px-5">Time</th>
+                <th className="py-4 px-5">Pax</th>
+                <th className="py-4 px-5">Table</th>
+                <th className="py-4 px-5">Status</th>
+                <th className="py-4 px-5">Staff Assigned</th>
+                <th className="py-4 px-5">Special Notes</th>
+                <th className="py-4 px-5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-150">
+              {filteredGuests.length > 0 ? (
+                filteredGuests.map((r, i) => (
+                  <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="py-4 px-5 text-center text-[#8a9ab5] font-semibold">
+                      {i + 1}
+                    </td>
+                    <td className="py-4 px-5 font-bold text-navy text-sm">
+                      {r.name}
+                    </td>
+                    <td className="py-4 px-5 font-semibold text-slate-600">
+                      {r.phone || "—"}
+                    </td>
+                    <td className="py-4 px-5">
+                      <span className={`px-2.5 py-1 text-[9px] font-bold rounded-lg uppercase ${getTypeBadgeClass(r.type)}`}>
+                        {r.type === EntryType.WALK_IN ? "🚶 Walk-In" : "📋 RSVP"}
+                      </span>
+                    </td>
+                    <td className="py-4 px-5 font-medium text-slate-600">
+                      {r.date}
+                    </td>
+                    <td className="py-4 px-5 font-semibold text-navy-soft">
+                      {r.time || "—"}
+                    </td>
+                    <td className="py-4 px-5 font-bold text-navy text-sm">
+                      {r.pax}
+                    </td>
+                    <td className="py-4 px-5">
+                      {r.table && r.table !== "Unassigned" ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-[11px]">
+                          {getTableIcon(r.table)} {r.table}
+                        </span>
+                      ) : (
+                        <span className="text-[#8a9ab5] font-normal italic">Unassigned</span>
+                      )}
+                    </td>
+                    <td className="py-4 px-5">
+                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold inline-block text-center whitespace-nowrap ${getStatusBadgeClass(r.status)}`}>
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="py-4 px-5 font-semibold text-slate-600">
+                      {r.staff ? `👤 ${r.staff}` : "—"}
+                    </td>
+                    <td className="py-4 px-5 text-slate-500 max-w-[150px] truncate" title={r.notes}>
+                      {r.notes || "—"}
+                    </td>
+                    <td className="py-4 px-5 text-right whitespace-nowrap">
+                      <div className="inline-flex gap-2 justify-end">
+                        <button
+                          onClick={() => onEditGuest(r)}
+                          className="p-1.5 rounded-lg bg-blue-50 border border-blue-200 hover:bg-blue-100/70 text-blue-600 transition"
+                          title="Edit"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onDeleteGuest(r.id)}
+                          className="p-1.5 rounded-lg bg-rose-50 border border-rose-200 hover:bg-rose-100/70 text-rose-600 transition"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={12} className="py-12 text-center text-[#8a9ab5]">
+                    <span className="text-3xl block mb-2">🔍</span>
+                    No reservations found matching the selected filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
