@@ -219,7 +219,7 @@ export default function TableMapView({
         </div>
 
         <div className="bg-white px-5 py-4 border border-gray-150 rounded-2xl flex items-center justify-between shadow-2xs">
-          <span className="text-xs font-bold text-[#8a9ab5] uppercase">🔴 Blocked</span>
+          <span className="text-xs font-bold text-[#8a9ab5] uppercase">🔴 Reserved</span>
           <span className="font-serif text-2xl font-bold text-rose-600">{blockedCount}</span>
         </div>
       </div>
@@ -243,7 +243,7 @@ export default function TableMapView({
               statusBadge = <span className="text-[10px] bg-amber-50 border border-amber-200 text-amber-800 font-bold uppercase py-0.5 px-2 rounded-md">Occupied</span>;
             } else if (state === "unavailable") {
               borderCls = "border-rose-200 ring-2 ring-rose-50 bg-rose-500/5 hover:bg-rose-500/10";
-              statusBadge = <span className="text-[10px] bg-rose-50 border border-rose-200 text-rose-800 font-bold uppercase py-0.5 px-2 rounded-md">Blocked</span>;
+              statusBadge = <span className="text-[10px] bg-rose-50 border border-rose-200 text-rose-800 font-bold uppercase py-0.5 px-2 rounded-md">Reserved</span>;
             }
 
             return (
@@ -285,9 +285,9 @@ export default function TableMapView({
         <div className="px-8 py-5 border-t border-gray-150 bg-slate-50 flex flex-wrap justify-between items-center text-xs font-semibold text-[#4b5c73] gap-4">
           <div className="flex flex-wrap gap-5">
             <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-full" /> Available</span>
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-indigo-500 rounded-full" /> Reserved</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-indigo-500 rounded-full" /> Booked</span>
             <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-amber-500 rounded-full" /> Occupied/Seated</span>
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-rose-500 rounded-full" /> Blocked/Unavailable</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-rose-500 rounded-full" /> Reserved</span>
           </div>
           <p className="text-[11px] text-[#8a9ab5] font-medium leading-none">
             💡 Tip: Click on any table to link guests, set manual overrides, or free up seats
@@ -340,7 +340,7 @@ export default function TableMapView({
                         : "border-slate-200 hover:bg-slate-50 text-slate-700"
                     }`}
                   >
-                    🚫 Block Table
+                    🚫 Reserve Table
                   </button>
                 </div>
               </div>
@@ -434,7 +434,7 @@ export default function TableMapView({
                       <th className="py-2.5 px-3 w-20">Icon</th>
                       <th className="py-2.5 px-3">Unique Name</th>
                       <th className="py-2.5 px-3 w-28">Sitting Cap</th>
-                      <th className="py-2.5 px-3 w-36">Blocked State</th>
+                      <th className="py-2.5 px-3 w-36">Reserved State</th>
                       <th className="py-2.5 px-3 text-right w-16">Remove</th>
                     </tr>
                   </thead>
@@ -501,7 +501,7 @@ export default function TableMapView({
                             className="bg-slate-100 border border-slate-200 rounded-md py-1 px-1.5 text-navy font-semibold focus:outline-none focus:ring-1 focus:ring-gold text-[11px]"
                           >
                             <option value="">Auto (Seatable)</option>
-                            <option value="unavailable">🚫 Blocked</option>
+                            <option value="unavailable">🚫 Reserved</option>
                           </select>
                         </td>
 

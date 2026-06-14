@@ -14,34 +14,25 @@ export const getDetectedTimezone = (): string => {
 };
 
 export const getStoredTimezone = (): string => {
-  const stored = localStorage.getItem("guest_rsvp_mngr_timezone");
-  if (stored) return stored;
-  const detected = getDetectedTimezone();
-  localStorage.setItem("guest_rsvp_mngr_timezone", detected);
-  return detected;
+  return getDetectedTimezone();
 };
 
 export const setStoredTimezone = (tz: string): void => {
-  localStorage.setItem("guest_rsvp_mngr_timezone", tz);
+  // no-op
 };
 
-// Formats today's date matching the chosen timezone as YYYY-MM-DD
-export const getTodayStringInTimezone = (tz: string): string => {
+// Formats today's date matching the device local timezone as YYYY-MM-DD
+export const getTodayStringInTimezone = (tz?: string): string => {
   try {
+    const timeZone = tz && tz !== "AUTO" ? tz : getDetectedTimezone();
     const d = new Date();
-    const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: tz,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    });
-    const parts = formatter.formatToParts(d);
-    const year = parts.find(p => p.type === "year")?.value || String(d.getFullYear());
-    const month = parts.find(p => p.type === "month")?.value || String(d.getMonth() + 1).padStart(2, "0");
-    const day = parts.find(p => p.type === "day")?.value || String(d.getDate()).padStart(2, "0");
+    
+    const year = new Intl.DateTimeFormat("en", { year: "numeric", timeZone }).format(d);
+    const month = new Intl.DateTimeFormat("en", { month: "2-digit", timeZone }).format(d);
+    const day = new Intl.DateTimeFormat("en", { day: "2-digit", timeZone }).format(d);
+    
     return `${year}-${month}-${day}`;
   } catch (e) {
-    // fallback
     const d = new Date();
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -50,28 +41,20 @@ export const getTodayStringInTimezone = (tz: string): string => {
   }
 };
 
-// Formats current system time in HH:MM (24-hour style) matching the chosen timezone
-export const getSystemTime24InTimezone = (tz: string): string => {
+// Formats current system time in HH:MM (24-hour style) matching the device local timezone
+export const getSystemTime24InTimezone = (tz?: string): string => {
   try {
+    const timeZone = tz && tz !== "AUTO" ? tz : getDetectedTimezone();
     const d = new Date();
-    const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: tz,
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false
-    });
-    const parts = formatter.formatToParts(d);
-    let hour = parts.find(p => p.type === "hour")?.value || String(d.getHours()).padStart(2, "0");
-    const minute = parts.find(p => p.type === "minute")?.value || String(d.getMinutes()).padStart(2, "0");
     
-    // Some formats include leading spaces or map 24 to 00/24 depending on runtime
-    hour = hour.trim();
-    if (hour === "24") hour = "00";
-    hour = hour.padStart(2, "0");
+    const hour = new Intl.DateTimeFormat("en", { hour: "2-digit", hourCycle: "h23", timeZone }).format(d);
+    const minute = new Intl.DateTimeFormat("en", { minute: "2-digit", timeZone }).format(d);
     
-    return `${hour}:${minute}`;
+    const cleanHour = String(hour).padStart(2, "0").slice(-2);
+    const cleanMinute = String(minute).padStart(2, "0").slice(-2);
+    
+    return `${cleanHour}:${cleanMinute}`;
   } catch (e) {
-    // fallback
     const d = new Date();
     const h = String(d.getHours()).padStart(2, "0");
     const m = String(d.getMinutes()).padStart(2, "0");
@@ -81,15 +64,6 @@ export const getSystemTime24InTimezone = (tz: string): string => {
 
 // Get list of standard/popular timezones for selection
 export const POPULAR_TIMEZONES = [
-  { name: "Local Autodetected", value: "AUTO" },
-  { name: "London (GMT/BST)", value: "Europe/London" },
-  { name: "Paris/Riyadh (GMT+3)", value: "Asia/Riyadh" },
-  { name: "Dubai (GMT+4)", value: "Asia/Dubai" },
-  { name: "New York (EST/EDT)", value: "America/New_York" },
-  { name: "Chicago (CST/CDT)", value: "America/Chicago" },
-  { name: "Los Angeles (PST/PDT)", value: "America/Los_Angeles" },
-  { name: "Tokyo (GMT+9)", value: "Asia/Tokyo" },
-  { name: "Singapore (GMT+8)", value: "Asia/Singapore" },
-  { name: "Sydney (AEST/AEDT)", value: "Australia/Sydney" },
-  { name: "UTC / GMT", value: "UTC" }
+  { name: "Device Local Time", value: "AUTO" }
 ];
+

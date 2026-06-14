@@ -11,9 +11,19 @@ interface ReservationsViewProps {
   guests: Guest[];
   onEditGuest: (guest: Guest) => void;
   onDeleteGuest: (id: string) => void;
+  onUpdateStatus: (id: string, newStatus: RsvpStatus) => void;
+  onBulkUpdateStatus?: (ids: string[], newStatus: RsvpStatus) => void;
+  onBulkDeleteGuests?: (ids: string[]) => void;
 }
 
-export default function ReservationsView({ guests, onEditGuest, onDeleteGuest }: ReservationsViewProps) {
+export default function ReservationsView({
+  guests,
+  onEditGuest,
+  onDeleteGuest,
+  onUpdateStatus,
+  onBulkUpdateStatus,
+  onBulkDeleteGuests
+}: ReservationsViewProps) {
   const getTableIcon = (tableName: string) => {
     try {
       const cachedTables = localStorage.getItem("guest_rsvp_mngr_tables");
@@ -31,6 +41,63 @@ export default function ReservationsView({ guests, onEditGuest, onDeleteGuest }:
   const [filterDate, setFilterDate] = useState("");
   const [filterType, setFilterType] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<string>("");
+
+  // Checkbox Selection State
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const formatGeneralDate = (dateStr: string) => {
+    if (!dateStr) return "—";
+    try {
+      let normalized = dateStr;
+      if (dateStr.includes("T") || dateStr.includes("Z")) {
+        try {
+          const d = new Date(dateStr);
+          if (!isNaN(d.getTime())) {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, "0");
+            const day = String(d.getDate()).padStart(2, "0");
+            normalized = `${year}-${month}-${day}`;
+          } else {
+            normalized = dateStr.split("T")[0];
+          }
+        } catch {
+          normalized = dateStr.split("T")[0];
+        }
+      }
+
+      const parts = normalized.split("-");
+      if (parts.length === 3) {
+        const [year, month, day] = parts.map(Number);
+        const d = new Date(year, month - 1, day);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString(undefined, {
+            year: "numeric",
+            month: "short",
+            day: "numeric"
+          });
+        }
+      }
+      return dateStr;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const formatGeneralTime = (timeStr: string) => {
+    if (!timeStr) return "—";
+    try {
+      const parts = timeStr.split(":");
+      const hour = parseInt(parts[0], 10);
+      const min = parseInt(parts[1], 10);
+      if (isNaN(hour) || isNaN(min)) return timeStr;
+      const ampm = hour >= 12 ? "PM" : "AM";
+      const h12 = hour % 12 === 0 ? 12 : hour % 12;
+      const mStr = String(min).padStart(2, "0");
+      return `${h12}:${mStr} ${ampm}`;
+    } catch {
+      return timeStr;
+    }
+  };
 
   // Clear filters handler
   const handleClearFilters = () => {
@@ -55,6 +122,40 @@ export default function ReservationsView({ guests, onEditGuest, onDeleteGuest }:
 
   const totalPax = filteredGuests.reduce((sum, g) => sum + (g.pax || 0), 0);
 
+  const isAllSelected = filteredGuests.length > 0 && filteredGuests.every((g) => selectedIds.includes(g.id));
+  const isSomeSelected = filteredGuests.length > 0 && !isAllSelected && filteredGuests.some((g) => selectedIds.includes(g.id));
+
+  const handleSelectAllToggle = () => {
+    if (isAllSelected) {
+      const filteredVisibleIds = filteredGuests.map(g => g.id);
+      setSelectedIds(prev => prev.filter(id => !filteredVisibleIds.includes(id)));
+    } else {
+      const filteredVisibleIds = filteredGuests.map(g => g.id);
+      setSelectedIds(prev => {
+        const union = new Set([...prev, ...filteredVisibleIds]);
+        return Array.from(union);
+      });
+    }
+  };
+
+  const handleSelectRowToggle = (id: string) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkStatusChange = (status: RsvpStatus) => {
+    if (selectedIds.length === 0) return;
+    onBulkUpdateStatus?.(selectedIds, status);
+    setSelectedIds([]);
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    onBulkDeleteGuests?.(selectedIds);
+    setSelectedIds([]);
+  };
+
   const getStatusBadgeClass = (status: RsvpStatus) => {
     switch (status) {
       case RsvpStatus.CONFIRMED:
@@ -67,6 +168,10 @@ export default function ReservationsView({ guests, onEditGuest, onDeleteGuest }:
         return "bg-orange-50 text-orange-850 border border-orange-200";
       case RsvpStatus.CANCELLED:
         return "bg-rose-50 text-rose-800 border border-rose-200";
+      case RsvpStatus.ARRIVED:
+        return "bg-emerald-600 text-white border border-emerald-750 font-extrabold shadow-3xs";
+      case RsvpStatus.DEPARTED:
+        return "bg-slate-500 text-white border border-slate-600 font-extrabold shadow-3xs";
       default:
         return "bg-slate-50 text-slate-800 border border-slate-200";
     }
@@ -157,7 +262,10 @@ export default function ReservationsView({ guests, onEditGuest, onDeleteGuest }:
 
         {/* Results summary band indicator */}
         <div className="px-6 py-3 bg-gold-pale/50 border-b border-gray-150 text-xs font-semibold text-gold flex justify-between">
-          <span>Showing {filteredGuests.length} of {guests.length} matches</span>
+          <span>
+            {filterDate ? `📁 Selected Date History: ${formatGeneralDate(filterDate)}` : "📁 Showing all days' history"} 
+            {` (${filteredGuests.length} of ${guests.length} matches)`}
+          </span>
           <span>Cumulative headcount: {totalPax} guests (pax)</span>
         </div>
 
@@ -166,6 +274,19 @@ export default function ReservationsView({ guests, onEditGuest, onDeleteGuest }:
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-navy text-white font-semibold uppercase tracking-wider text-[10px]">
+                <th className="py-4 px-5 w-12 text-center">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    ref={(el) => {
+                      if (el) {
+                        el.indeterminate = isSomeSelected;
+                      }
+                    }}
+                    onChange={handleSelectAllToggle}
+                    className="w-4 h-4 rounded border-gray-300 text-[#bf8f30] focus:ring-[#bf8f30] accent-[#bf8f30] cursor-pointer"
+                  />
+                </th>
                 <th className="py-4 px-5 w-12 text-center">#</th>
                 <th className="py-4 px-5">Name</th>
                 <th className="py-4 px-5">Phone</th>
@@ -174,6 +295,7 @@ export default function ReservationsView({ guests, onEditGuest, onDeleteGuest }:
                 <th className="py-4 px-5">Time</th>
                 <th className="py-4 px-5">Pax</th>
                 <th className="py-4 px-5">Table</th>
+                <th className="py-4 px-5">Arrive / Depart</th>
                 <th className="py-4 px-5">Status</th>
                 <th className="py-4 px-5">Staff Assigned</th>
                 <th className="py-4 px-5">Special Notes</th>
@@ -183,7 +305,20 @@ export default function ReservationsView({ guests, onEditGuest, onDeleteGuest }:
             <tbody className="divide-y divide-gray-150">
               {filteredGuests.length > 0 ? (
                 filteredGuests.map((r, i) => (
-                  <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
+                  <tr
+                    key={r.id}
+                    className={`hover:bg-slate-50/50 transition-colors ${
+                      selectedIds.includes(r.id) ? "bg-[#bf8f30]/10 hover:bg-[#bf8f30]/15" : ""
+                    }`}
+                  >
+                    <td className="py-4 px-5 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(r.id)}
+                        onChange={() => handleSelectRowToggle(r.id)}
+                        className="w-4 h-4 rounded border-gray-300 text-[#bf8f30] focus:ring-[#bf8f30] accent-[#bf8f30] cursor-pointer"
+                      />
+                    </td>
                     <td className="py-4 px-5 text-center text-[#8a9ab5] font-semibold">
                       {i + 1}
                     </td>
@@ -199,10 +334,10 @@ export default function ReservationsView({ guests, onEditGuest, onDeleteGuest }:
                       </span>
                     </td>
                     <td className="py-4 px-5 font-medium text-slate-600">
-                      {r.date}
+                      {formatGeneralDate(r.date)}
                     </td>
                     <td className="py-4 px-5 font-semibold text-navy-soft">
-                      {r.time || "—"}
+                      {formatGeneralTime(r.time)}
                     </td>
                     <td className="py-4 px-5 font-bold text-navy text-sm">
                       {r.pax}
@@ -215,6 +350,32 @@ export default function ReservationsView({ guests, onEditGuest, onDeleteGuest }:
                       ) : (
                         <span className="text-[#8a9ab5] font-normal italic">Unassigned</span>
                       )}
+                    </td>
+                    <td className="py-4 px-5">
+                      <div className="inline-flex rounded-lg border border-slate-205 p-0.5 bg-slate-50 gap-0.5 shadow-3xs">
+                        <button
+                          onClick={() => onUpdateStatus(r.id, r.status === RsvpStatus.ARRIVED ? RsvpStatus.CONFIRMED : RsvpStatus.ARRIVED)}
+                          className={`px-2 py-1 text-[10px] font-extrabold rounded-md uppercase tracking-wider transition-all duration-150 cursor-pointer ${
+                            r.status === RsvpStatus.ARRIVED
+                              ? "bg-emerald-600 text-white font-extrabold shadow-3xs"
+                              : "text-slate-500 hover:text-navy hover:bg-slate-100"
+                          }`}
+                          title={r.status === RsvpStatus.ARRIVED ? "Arrived - Click to edit" : "Mark as Arrived"}
+                        >
+                          Arrive
+                        </button>
+                        <button
+                          onClick={() => onUpdateStatus(r.id, r.status === RsvpStatus.DEPARTED ? RsvpStatus.ARRIVED : RsvpStatus.DEPARTED)}
+                          className={`px-2 py-1 text-[10px] font-extrabold rounded-md uppercase tracking-wider transition-all duration-150 cursor-pointer ${
+                            r.status === RsvpStatus.DEPARTED
+                              ? "bg-slate-500 text-white font-extrabold shadow-3xs"
+                              : "text-slate-500 hover:text-navy hover:bg-slate-100"
+                          }`}
+                          title={r.status === RsvpStatus.DEPARTED ? "Departed - Click to edit" : "Mark as Departed"}
+                        >
+                          Depart
+                        </button>
+                      </div>
                     </td>
                     <td className="py-4 px-5">
                       <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold inline-block text-center whitespace-nowrap ${getStatusBadgeClass(r.status)}`}>
@@ -249,7 +410,7 @@ export default function ReservationsView({ guests, onEditGuest, onDeleteGuest }:
                 ))
               ) : (
                 <tr>
-                  <td colSpan={12} className="py-12 text-center text-[#8a9ab5]">
+                  <td colSpan={14} className="py-12 text-center text-[#8a9ab5]">
                     <span className="text-3xl block mb-2">🔍</span>
                     No reservations found matching the selected filters.
                   </td>
@@ -259,6 +420,64 @@ export default function ReservationsView({ guests, onEditGuest, onDeleteGuest }:
           </table>
         </div>
       </div>
+
+      {/* Bulk Operations Sticky Toolbar */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-navy text-white px-5 py-3.5 rounded-2xl shadow-xl flex flex-col md:flex-row items-center gap-4 md:gap-6 border border-slate-700/80 animate-slideUp max-w-[95vw] md:max-w-4xl truncate">
+          <div className="flex items-center gap-2">
+            <span className="bg-[#bf8f30] px-2.5 py-1 rounded-lg text-xs font-bold text-white">
+              {selectedIds.length}
+            </span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+              Selected
+            </span>
+          </div>
+          
+          <div className="hidden md:block h-6 w-[1px] bg-slate-700" />
+          
+          <div className="flex flex-wrap items-center gap-1.5 justify-center">
+            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider mr-1">
+              Mark Status:
+            </span>
+            {[
+              RsvpStatus.CONFIRMED,
+              RsvpStatus.SEATED,
+              RsvpStatus.ARRIVED,
+              RsvpStatus.PENDING,
+              RsvpStatus.NO_SHOW,
+              RsvpStatus.CANCELLED,
+              RsvpStatus.DEPARTED
+            ].map((status) => (
+              <button
+                key={status}
+                onClick={() => handleBulkStatusChange(status)}
+                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold rounded-lg transition-colors cursor-pointer text-slate-200"
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+
+          <div className="hidden md:block h-5 w-[1px] bg-slate-700" />
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleBulkDelete}
+              className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-[10px] font-bold rounded-lg text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete {selectedIds.length}
+            </button>
+
+            <button
+              onClick={() => setSelectedIds([])}
+              className="text-xs text-slate-400 hover:text-white font-semibold transition cursor-pointer"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

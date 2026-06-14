@@ -87,7 +87,7 @@ function doPost(e) {
     }
 
     function getData(sheet) {
-      let rows = sheet.getDataRange().getValues();
+      let rows = sheet.getDataRange().getDisplayValues();
       if (rows.length < 2) return [];
       let headers = rows[0];
       return rows.slice(1).map(row => {

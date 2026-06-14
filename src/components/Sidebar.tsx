@@ -12,13 +12,11 @@ interface SidebarProps {
   openEntryModal: (type: "Reservation" | "Walk-In") => void;
   openStaffModal: () => void;
   openSyncModal: () => void;
-  openSubAccountsModal: () => void;
   exportCSV: () => void;
   isOpen: boolean;
   onClose: () => void;
   isSynced: boolean;
   sheetUrlConfigured: boolean;
-  userRole: "Admin" | "Staff";
   username: string | null;
   onLogout: () => void;
   restaurantName: string;
@@ -33,13 +31,11 @@ export default function Sidebar({
   openEntryModal,
   openStaffModal,
   openSyncModal,
-  openSubAccountsModal,
   exportCSV,
   isOpen,
   onClose,
   isSynced,
   sheetUrlConfigured,
-  userRole,
   username,
   onLogout,
   restaurantName,
@@ -211,13 +207,13 @@ export default function Sidebar({
         {/* User Session Role Profile card */}
         <div id="sidebar-role-profile-badge" className="mx-4 mt-5 p-3.5 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-2">
-            <div className={`p-2 rounded-xl ${userRole === "Admin" ? "bg-amber-500/20 text-gold-light" : "bg-indigo-500/20 text-indigo-300"}`}>
-              {userRole === "Admin" ? <Shield className="w-4 h-4 shrink-0" /> : <Users className="w-4 h-4 shrink-0" />}
+            <div className="p-2 rounded-xl bg-amber-500/20 text-gold-light">
+              <Shield className="w-4 h-4 shrink-0" />
             </div>
-            <div>
-              <p className="text-[9px] text-white/50 font-bold uppercase tracking-widest leading-none">Logged In</p>
-              <h4 className="text-[12px] text-white font-black leading-none mt-1">
-                {username ? username : (userRole === "Admin" ? "Admin" : "Staff")}
+            <div className="min-w-0">
+              <p className="text-[9px] text-white/50 font-bold uppercase tracking-widest leading-none">Gmail Account</p>
+              <h4 className="text-[11px] text-white font-black leading-none mt-1 truncate max-w-[125px]" title={username || "Manager"}>
+                {username ? username : "demo@gmail.com"}
               </h4>
             </div>
           </div>
@@ -341,55 +337,17 @@ export default function Sidebar({
                 <span>Manage Staff</span>
               </button>
 
-              {userRole === "Admin" ? (
-                <>
-                  <button
-                    id="sidebar-tool-sync"
-                    onClick={() => {
-                      openSyncModal();
-                      onClose();
-                    }}
-                    className="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-medium text-white/75 hover:bg-white/10 hover:text-white transition-all text-left cursor-pointer"
-                  >
-                    <CloudLightning className={`w-5 h-5 shrink-0 ${sheetUrlConfigured ? "text-amber-400 animate-pulse" : "text-gray-400"}`} />
-                    <span>Google Sheets Sync</span>
-                  </button>
-
-                  <button
-                    id="sidebar-tool-sub-accounts"
-                    onClick={() => {
-                      openSubAccountsModal();
-                      onClose();
-                    }}
-                    className="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-medium text-white/75 hover:bg-white/10 hover:text-white transition-all text-left cursor-pointer"
-                  >
-                    <Key className="w-5 h-5 shrink-0 text-amber-500" />
-                    <span>Manage Sub Accounts</span>
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div
-                    id="sidebar-tool-sync-locked"
-                    className="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-medium text-white/35 bg-white/5 border border-white/5 select-none"
-                    title="Requires Admin (Main Account)"
-                  >
-                    <Lock className="w-5 h-5 shrink-0 text-white/30" />
-                    <span className="flex-1">Google Sheets Sync</span>
-                    <span className="text-[9px] bg-white/10 text-white/50 px-1.5 py-0.5 rounded font-black tracking-widest uppercase">Locked</span>
-                  </div>
-
-                  <div
-                    id="sidebar-tool-sub-accounts-locked"
-                    className="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-medium text-white/35 bg-white/5 border border-white/5 select-none"
-                    title="Requires Admin (Main Account)"
-                  >
-                    <Lock className="w-5 h-5 shrink-0 text-white/30" />
-                    <span className="flex-1">Manage Sub Accounts</span>
-                    <span className="text-[9px] bg-white/10 text-white/50 px-1.5 py-0.5 rounded font-black tracking-widest uppercase">Locked</span>
-                  </div>
-                </>
-              )}
+              <button
+                id="sidebar-tool-sync"
+                onClick={() => {
+                  openSyncModal();
+                  onClose();
+                }}
+                className="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-medium text-white/75 hover:bg-white/10 hover:text-white transition-all text-left cursor-pointer"
+              >
+                <CloudLightning className={`w-5 h-5 shrink-0 ${sheetUrlConfigured ? "text-amber-400 animate-pulse" : "text-gray-400"}`} />
+                <span>Google Sheets Sync</span>
+              </button>
 
               <button
                 id="sidebar-tool-export"

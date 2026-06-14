@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Menu, Wifi, CloudLightning, Loader2, ArrowRight, RefreshCw } from "lucide-react";
+import { Menu, Loader2, RefreshCw } from "lucide-react";
 
 // Types & Defaults
 import { Guest, TableConfig, RsvpStatus, EntryType } from "./types";
@@ -19,39 +19,34 @@ import EntryModal from "./components/EntryModal";
 import StaffManagerModal from "./components/StaffManagerModal";
 import SyncConfigPanel from "./components/SyncConfigPanel";
 import LoginScreen from "./components/LoginScreen";
-import SubAccountsManagerModal from "./components/SubAccountsManagerModal";
 
 // Timezone Utilities
 import {
   getDetectedTimezone,
-  getStoredTimezone,
-  setStoredTimezone,
-  getTodayStringInTimezone,
   getSystemTime24InTimezone,
   POPULAR_TIMEZONES
 } from "./utils/timezone";
 
 export default function App() {
-  // Authentication Role State ("Admin" for Main, "Staff" for Sub, or null for logged out)
-  const [loggedUserRole, setLoggedUserRole] = useState<"Admin" | "Staff" | null>(() => {
-    return localStorage.getItem("guest_rsvp_mngr_active_role") as "Admin" | "Staff" | null;
-  });
-
   const [loggedUsername, setLoggedUsername] = useState<string | null>(() => {
     return localStorage.getItem("guest_rsvp_mngr_active_username");
   });
 
-  const handleLoginSuccess = (role: "Admin" | "Staff", username: string) => {
-    setLoggedUserRole(role);
-    setLoggedUsername(username);
-    localStorage.setItem("guest_rsvp_mngr_active_role", role);
-    localStorage.setItem("guest_rsvp_mngr_active_username", username);
+  // Dynamic LocalStorage key generator per independent Gmail account to guarantee isolate sandbox state
+  const getAccountKey = (keyName: string) => {
+    if (!loggedUsername) return `guest_rsvp_mngr_${keyName}`;
+    const safeUser = loggedUsername.toLowerCase().trim().replace(/[@.]/g, "_");
+    return `guest_rsvp_mngr_${safeUser}_${keyName}`;
+  };
+
+  const handleLoginSuccess = (username: string) => {
+    const cleanEmail = username.trim().toLowerCase();
+    setLoggedUsername(cleanEmail);
+    localStorage.setItem("guest_rsvp_mngr_active_username", cleanEmail);
   };
 
   const handleLogout = () => {
-    setLoggedUserRole(null);
     setLoggedUsername(null);
-    localStorage.removeItem("guest_rsvp_mngr_active_role");
     localStorage.removeItem("guest_rsvp_mngr_active_username");
     showToast("🔓 Logged out of your session successfully");
   };
@@ -60,33 +55,28 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"dashboard" | "reservations" | "tablemap">("dashboard");
 
   // Restaurant Custom Brand Configuration
-  const [restaurantName, setRestaurantName] = useState(() => {
-    return localStorage.getItem("guest_rsvp_mngr_restaurant_name") || "Guest Manager";
-  });
-
-  const [restaurantPhoto, setRestaurantPhoto] = useState<string | null>(() => {
-    return localStorage.getItem("guest_rsvp_mngr_restaurant_photo");
-  });
+  const [restaurantName, setRestaurantName] = useState("Guest Manager");
+  const [restaurantPhoto, setRestaurantPhoto] = useState<string | null>(null);
 
   const handleSaveRestaurantName = (name: string) => {
     setRestaurantName(name);
-    localStorage.setItem("guest_rsvp_mngr_restaurant_name", name);
+    localStorage.setItem(getAccountKey("restaurant_name"), name);
     showToast(`🏨 Restaurant updated to: ${name}`);
   };
 
   const handleSaveRestaurantPhoto = (photo: string | null) => {
     setRestaurantPhoto(photo);
     if (photo) {
-      localStorage.setItem("guest_rsvp_mngr_restaurant_photo", photo);
+      localStorage.setItem(getAccountKey("restaurant_photo"), photo);
       showToast(`📸 Restaurant photo updated successfully`);
     } else {
-      localStorage.removeItem("guest_rsvp_mngr_restaurant_photo");
+      localStorage.removeItem(getAccountKey("restaurant_photo"));
       showToast(`🗑️ Restaurant logo reset to default`);
     }
   };
 
   // Timezone & real-time clock state control
-  const [timezone, setTimezone] = useState(() => getStoredTimezone());
+  const [timezone, setTimezone] = useState("AUTO");
   const [currentTime, setCurrentTime] = useState("");
 
   const activeTz = timezone === "AUTO" ? getDetectedTimezone() : timezone;
@@ -102,7 +92,7 @@ export default function App() {
 
   const handleTimezoneChange = (tz: string) => {
     setTimezone(tz);
-    setStoredTimezone(tz);
+    localStorage.setItem(getAccountKey("timezone"), tz);
     showToast(`App timezone switched to: ${tz === "AUTO" ? getDetectedTimezone() : tz}`);
   };
 
@@ -110,12 +100,34 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Core Database States
-  const [guests, setGuests] = useState<Guest[]>([]);
+  const [guests, setRawGuests] = useState<Guest[]>([]);
+  const setGuests = React.useCallback((value: Guest[] | ((prev: Guest[]) => Guest[])) => {
+    setRawGuests(prev => {
+      const resolved = typeof value === "function" ? value(prev) : value;
+      return resolved.map(g => {
+        let cleanDate = g.date || "";
+        if (cleanDate && (cleanDate.includes("T") || cleanDate.includes("Z"))) {
+          try {
+            const d = new Date(cleanDate);
+            if (!isNaN(d.getTime())) {
+              const year = d.getFullYear();
+              const month = String(d.getMonth() + 1).padStart(2, "0");
+              const day = String(d.getDate()).padStart(2, "0");
+              cleanDate = `${year}-${month}-${day}`;
+            } else {
+              cleanDate = cleanDate.split("T")[0];
+            }
+          } catch (e) {
+            cleanDate = cleanDate.split("T")[0];
+          }
+        }
+        return { ...g, date: cleanDate };
+      });
+    });
+  }, []);
   const [tables, setTables] = useState<TableConfig[]>([]);
   const [staffList, setStaffList] = useState<string[]>([]);
-  const [scriptUrl, setScriptUrl] = useState(() => {
-    return localStorage.getItem("guest_rsvp_mngr_script_url") || "https://script.google.com/macros/s/AKfycby6xlQM9iYa5qOSkxeDrLSG6vkrZbTCz03tacSZyV_7hHwQJr4b5arT9Yo8skIk0Eemog/exec";
-  });
+  const [scriptUrl, setScriptUrl] = useState("");
 
   // Modals state control
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
@@ -124,19 +136,6 @@ export default function App() {
   
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
-  const [isSubAccountsModalOpen, setIsSubAccountsModalOpen] = useState(false);
-  
-  const [subAccounts, setSubAccounts] = useState<Array<{ username: string; password?: string }>>(() => {
-    const cached = localStorage.getItem("guest_rsvp_mngr_sub_accounts_list");
-    if (cached) {
-      try {
-        return JSON.parse(cached);
-      } catch (e) {
-        return [];
-      }
-    }
-    return [];
-  });
 
   // Global background sync loader
   const [isSyncing, setIsSyncing] = useState(false);
@@ -172,19 +171,28 @@ export default function App() {
       return result;
     } catch (err: any) {
       console.error("Sheets Sync Error: ", err);
-      showToast(`⚠️ Sync notice: ${err.message || "Connection rejected"}`);
+      let errMsg = err.message || "Connection rejected";
+      if (errMsg.toLowerCase().includes("failed to fetch") || errMsg.toLowerCase().includes("typeerror")) {
+        errMsg = "Google Web App unreachable. Ensure your Apps Script URL is correct and deployed with access: 'Anyone'.";
+      }
+      showToast(`⚠️ Sync notice: ${errMsg}`);
       return null;
     } finally {
       setIsSyncing(false);
     }
   };
 
-  // INITIAL COMPONENT MOUNT: Load Database states with LocalStorage and sync fallbacks
+  // SEED AND INITIALIZE DATASETS PER LOGGED GMAIL ACCOUNT
   useEffect(() => {
-    const cachedGuests = localStorage.getItem("guest_rsvp_mngr_guests");
-    const cachedTables = localStorage.getItem("guest_rsvp_mngr_tables");
-    const cachedStaff = localStorage.getItem("guest_rsvp_mngr_staff");
-    const cachedUrl = localStorage.getItem("guest_rsvp_mngr_script_url");
+    if (!loggedUsername) return;
+
+    const cachedGuests = localStorage.getItem(getAccountKey("guests"));
+    const cachedTables = localStorage.getItem(getAccountKey("tables"));
+    const cachedStaff = localStorage.getItem(getAccountKey("staff"));
+    const cachedUrl = localStorage.getItem(getAccountKey("script_url"));
+    const cachedName = localStorage.getItem(getAccountKey("restaurant_name"));
+    const cachedPhoto = localStorage.getItem(getAccountKey("restaurant_photo"));
+    const cachedTz = localStorage.getItem(getAccountKey("timezone"));
 
     let loadedGuests = initialGuests;
     let loadedTables = initialTables;
@@ -197,7 +205,7 @@ export default function App() {
         loadedGuests = initialGuests;
       }
     } else {
-      localStorage.setItem("guest_rsvp_mngr_guests", JSON.stringify(initialGuests));
+      localStorage.setItem(getAccountKey("guests"), JSON.stringify(initialGuests));
     }
 
     if (cachedTables) {
@@ -220,7 +228,7 @@ export default function App() {
         loadedTables = initialTables;
       }
     } else {
-      localStorage.setItem("guest_rsvp_mngr_tables", JSON.stringify(initialTables));
+      localStorage.setItem(getAccountKey("tables"), JSON.stringify(initialTables));
     }
 
     if (cachedStaff) {
@@ -230,7 +238,7 @@ export default function App() {
         loadedStaff = initialStaff;
       }
     } else {
-      localStorage.setItem("guest_rsvp_mngr_staff", JSON.stringify(initialStaff));
+      localStorage.setItem(getAccountKey("staff"), JSON.stringify(initialStaff));
     }
 
     // Set states
@@ -238,20 +246,37 @@ export default function App() {
     setTables(loadedTables);
     setStaffList(loadedStaff);
 
+    // Sheets script URL
     const targetUrl = cachedUrl || "https://script.google.com/macros/s/AKfycby6xlQM9iYa5qOSkxeDrLSG6vkrZbTCz03tacSZyV_7hHwQJr4b5arT9Yo8skIk0Eemog/exec";
-    if (!cachedUrl) {
-      localStorage.setItem("guest_rsvp_mngr_script_url", targetUrl);
-    }
     setScriptUrl(targetUrl);
-    // Execute live background pull to update on startup automatically!
+    if (!cachedUrl) {
+      localStorage.setItem(getAccountKey("script_url"), targetUrl);
+    }
+
+    // Brand Name & Photo
+    setRestaurantName(cachedName || "Guest Manager");
+    if (!cachedName) {
+      localStorage.setItem(getAccountKey("restaurant_name"), "Guest Manager");
+    }
+    setRestaurantPhoto(cachedPhoto || null);
+
+    // Timezone
+    if (cachedTz) {
+      setTimezone(cachedTz);
+    } else {
+      setTimezone("AUTO");
+      localStorage.setItem(getAccountKey("timezone"), "AUTO");
+    }
+
+    // Execute background remote sync pull immediately on credentials swap
     setTimeout(() => {
-      executePullFromSheet(targetUrl);
+      executePullFromSheet(targetUrl, true);
     }, 500);
-  }, []);
+  }, [loggedUsername]);
 
   // Sync / pull data helper from sheet URL
   const executePullFromSheet = async (targetUrl: string, silent = false) => {
-    if (!targetUrl) return;
+    if (!targetUrl || !loggedUsername) return;
     try {
       if (!silent) setIsSyncing(true);
       const res = await fetch(targetUrl, {
@@ -266,22 +291,17 @@ export default function App() {
         // Save reservations if any exist on the remote sheet
         if (data.reservations && data.reservations.length > 0) {
           setGuests(data.reservations);
-          localStorage.setItem("guest_rsvp_mngr_guests", JSON.stringify(data.reservations));
+          localStorage.setItem(getAccountKey("guests"), JSON.stringify(data.reservations));
         }
         // Save tables configurations if matching remote list
         if (data.tables && data.tables.length > 0) {
           setTables(data.tables);
-          localStorage.setItem("guest_rsvp_mngr_tables", JSON.stringify(data.tables));
+          localStorage.setItem(getAccountKey("tables"), JSON.stringify(data.tables));
         }
         // Save crew roster
         if (data.staff && data.staff.length > 0) {
           setStaffList(data.staff);
-          localStorage.setItem("guest_rsvp_mngr_staff", JSON.stringify(data.staff));
-        }
-        // Save sub accounts list safely if it exists remotely
-        if (data.subAccounts && data.subAccounts.length > 0) {
-          setSubAccounts(data.subAccounts);
-          localStorage.setItem("guest_rsvp_mngr_sub_accounts_list", JSON.stringify(data.subAccounts));
+          localStorage.setItem(getAccountKey("staff"), JSON.stringify(data.staff));
         }
         if (!silent) {
           showToast("🔄 Google Sheets synchronized successfully!");
@@ -303,28 +323,25 @@ export default function App() {
     const interval = setInterval(() => {
       // Quiet background pull to refresh data silently
       executePullFromSheet(scriptUrl, true);
-    }, 5000); // Accelerated to 5 seconds auto-interval for near real-time platform updates
+    }, 5000); // 5 seconds auto-interval
     return () => clearInterval(interval);
-  }, [scriptUrl]);
+  }, [scriptUrl, loggedUsername]);
 
   // Local storage broadcast listener for instantaneous multi-tab sync on same machine
   useEffect(() => {
     const syncLocalTabs = (e: StorageEvent) => {
-      if (e.key === "guest_rsvp_mngr_guests" && e.newValue) {
+      if (!loggedUsername) return;
+      if (e.key === getAccountKey("guests") && e.newValue) {
         try { setGuests(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
-      } else if (e.key === "guest_rsvp_mngr_tables" && e.newValue) {
+      } else if (e.key === getAccountKey("tables") && e.newValue) {
         try { setTables(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
-      } else if (e.key === "guest_rsvp_mngr_staff" && e.newValue) {
+      } else if (e.key === getAccountKey("staff") && e.newValue) {
         try { setStaffList(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
-      } else if (e.key === "guest_rsvp_mngr_sub_accounts_list" && e.newValue) {
-        try { setSubAccounts(JSON.parse(e.newValue)); } catch (err) { console.error(err); }
-      } else if (e.key === "guest_rsvp_mngr_active_role") {
-        setLoggedUserRole(e.newValue as "Admin" | "Staff" | null);
       }
     };
     window.addEventListener("storage", syncLocalTabs);
     return () => window.removeEventListener("storage", syncLocalTabs);
-  }, []);
+  }, [loggedUsername]);
 
   // 1. ADD / UPDATE BOOKING ACTION
   const handleSaveGuest = async (savedGuest: Guest) => {
@@ -340,7 +357,7 @@ export default function App() {
 
     // Write to React state + LocalStorage
     setGuests(updatedList);
-    localStorage.setItem("guest_rsvp_mngr_guests", JSON.stringify(updatedList));
+    localStorage.setItem(getAccountKey("guests"), JSON.stringify(updatedList));
     setIsEntryModalOpen(false);
     setGuestToEdit(null);
 
@@ -350,21 +367,51 @@ export default function App() {
     }
   };
 
+  const handleUpdateGuestStatus = async (id: string, newStatus: RsvpStatus) => {
+    const updatedList = guests.map(g => (g.id === id ? { ...g, status: newStatus } : g));
+    setGuests(updatedList);
+    localStorage.setItem(getAccountKey("guests"), JSON.stringify(updatedList));
+    showToast(`⚡ Status updated to: ${newStatus}`);
+
+    if (scriptUrl) {
+      await callAppsScriptAPI("syncReservations", { reservations: updatedList });
+    }
+  };
+
   // 2. DELETE BOOKING ACTION
   const handleDeleteGuest = async (id: string) => {
-    if (loggedUserRole === "Staff") {
-      showToast("🚫 Permission Denied: Only Main Accounts (Admin) can delete reservations.");
-      return;
-    }
-
     const target = guests.find(g => g.id === id);
     if (!target) return;
 
     if (window.confirm(`Are you absolutely sure you want to remove the booking for ${target.name}?`)) {
       const updatedList = guests.filter(g => g.id !== id);
       setGuests(updatedList);
-      localStorage.setItem("guest_rsvp_mngr_guests", JSON.stringify(updatedList));
+      localStorage.setItem(getAccountKey("guests"), JSON.stringify(updatedList));
       showToast(`🗑️ ${target.name}'s reservation deleted`);
+
+      if (scriptUrl) {
+        await callAppsScriptAPI("syncReservations", { reservations: updatedList });
+      }
+    }
+  };
+
+  const handleBulkUpdateGuestStatus = async (ids: string[], newStatus: RsvpStatus) => {
+    const updatedList = guests.map(g => ids.includes(g.id) ? { ...g, status: newStatus } : g);
+    setGuests(updatedList);
+    localStorage.setItem(getAccountKey("guests"), JSON.stringify(updatedList));
+    showToast(`⚡ Bulk updated status of ${ids.length} reservation(s) to: ${newStatus}`);
+
+    if (scriptUrl) {
+      await callAppsScriptAPI("syncReservations", { reservations: updatedList });
+    }
+  };
+
+  const handleBulkDeleteGuests = async (ids: string[]) => {
+    if (window.confirm(`Are you absolutely sure you want to delete the ${ids.length} selected reservation(s)?`)) {
+      const updatedList = guests.filter(g => !ids.includes(g.id));
+      setGuests(updatedList);
+      localStorage.setItem(getAccountKey("guests"), JSON.stringify(updatedList));
+      showToast(`🗑️ Bulk deleted ${ids.length} reservation(s)`);
 
       if (scriptUrl) {
         await callAppsScriptAPI("syncReservations", { reservations: updatedList });
@@ -399,7 +446,7 @@ export default function App() {
     });
 
     setGuests(updatedList);
-    localStorage.setItem("guest_rsvp_mngr_guests", JSON.stringify(updatedList));
+    localStorage.setItem(getAccountKey("guests"), JSON.stringify(updatedList));
     showToast(`🔗 Assigned table to guest`);
 
     if (scriptUrl) {
@@ -409,12 +456,8 @@ export default function App() {
 
   // 6. GENERAL TABLES MANAGER CONF CONFIG SAVE
   const handleUpdateTableConfig = async (newTables: TableConfig[]) => {
-    if (loggedUserRole === "Staff") {
-      showToast("🚫 Permission Denied: Only Main Accounts (Admin) can configure table layouts.");
-      return;
-    }
     setTables(newTables);
-    localStorage.setItem("guest_rsvp_mngr_tables", JSON.stringify(newTables));
+    localStorage.setItem(getAccountKey("tables"), JSON.stringify(newTables));
     showToast("⚙️ Table deck configurations updated!");
 
     if (scriptUrl) {
@@ -430,7 +473,7 @@ export default function App() {
     }
     const updated = [...staffList, name];
     setStaffList(updated);
-    localStorage.setItem("guest_rsvp_mngr_staff", JSON.stringify(updated));
+    localStorage.setItem(getAccountKey("staff"), JSON.stringify(updated));
     showToast(`👤 Waiting staff ${name} registered`);
 
     if (scriptUrl) {
@@ -442,7 +485,7 @@ export default function App() {
     const targetName = staffList[index];
     const updated = staffList.filter((_, i) => i !== index);
     setStaffList(updated);
-    localStorage.setItem("guest_rsvp_mngr_staff", JSON.stringify(updated));
+    localStorage.setItem(getAccountKey("staff"), JSON.stringify(updated));
     showToast(`🗑️ ${targetName} removed from waitstaff`);
 
     if (scriptUrl) {
@@ -452,17 +495,13 @@ export default function App() {
 
   // 8. GOOGLE SHEETS CONNECTION CONFIGURATION
   const handleSaveSyncUrl = (url: string) => {
-    if (loggedUserRole === "Staff") {
-      showToast("🚫 Permission Denied: Only Main Accounts (Admin) can configure Google Sheets sync URLs.");
-      return;
-    }
     setScriptUrl(url);
     if (url) {
-      localStorage.setItem("guest_rsvp_mngr_script_url", url);
+      localStorage.setItem(getAccountKey("script_url"), url);
       // Run background pull immediately to capture spreadsheet state
       executePullFromSheet(url);
     } else {
-      localStorage.removeItem("guest_rsvp_mngr_script_url");
+      localStorage.removeItem(getAccountKey("script_url"));
       showToast("🔌 Apps Script Web App unlinked. Now offline local.");
     }
   };
@@ -483,52 +522,21 @@ export default function App() {
         // Save pulled database values immediately
         if (data.reservations && data.reservations.length > 0) {
           setGuests(data.reservations);
-          localStorage.setItem("guest_rsvp_mngr_guests", JSON.stringify(data.reservations));
+          localStorage.setItem(getAccountKey("guests"), JSON.stringify(data.reservations));
         }
         if (data.tables && data.tables.length > 0) {
           setTables(data.tables);
-          localStorage.setItem("guest_rsvp_mngr_tables", JSON.stringify(data.tables));
+          localStorage.setItem(getAccountKey("tables"), JSON.stringify(data.tables));
         }
         if (data.staff && data.staff.length > 0) {
           setStaffList(data.staff);
-          localStorage.setItem("guest_rsvp_mngr_staff", JSON.stringify(data.staff));
+          localStorage.setItem(getAccountKey("staff"), JSON.stringify(data.staff));
         }
         return true;
       }
       return false;
     } catch (e) {
       return false;
-    }
-  };
-
-  // 10. SUB ACCOUNTS CREATION/REMOVAL (ONLY ADMIN)
-  const handleAddSubAccount = async (username: string, password?: string) => {
-    if (loggedUserRole !== "Admin") {
-      showToast("🚫 Permission Denied: Only Main Accounts (Admin) can create sub accounts.");
-      return;
-    }
-    const updated = [...subAccounts, { username, password }];
-    setSubAccounts(updated);
-    localStorage.setItem("guest_rsvp_mngr_sub_accounts_list", JSON.stringify(updated));
-    showToast(`🔑 Sub account for "${username}" created successfully!`);
-
-    if (scriptUrl) {
-      await callAppsScriptAPI("syncSubAccounts", { subAccounts: updated });
-    }
-  };
-
-  const handleRemoveSubAccount = async (username: string) => {
-    if (loggedUserRole !== "Admin") {
-      showToast("🚫 Permission Denied: Only Main Accounts (Admin) can delete sub accounts.");
-      return;
-    }
-    const updated = subAccounts.filter(acc => acc.username !== username);
-    setSubAccounts(updated);
-    localStorage.setItem("guest_rsvp_mngr_sub_accounts_list", JSON.stringify(updated));
-    showToast(`🗑️ Sub account for "${username}" deleted.`);
-
-    if (scriptUrl) {
-      await callAppsScriptAPI("syncSubAccounts", { subAccounts: updated });
     }
   };
 
@@ -570,7 +578,7 @@ export default function App() {
     return new Date().toLocaleDateString(undefined, options);
   };
 
-  if (!loggedUserRole) {
+  if (!loggedUsername) {
     return (
       <div id="guest-rsvp-manager-login-screen-wrap" className="min-h-screen bg-[#f3f6fa]">
         <div
@@ -584,8 +592,9 @@ export default function App() {
         </div>
         <LoginScreen 
           onLoginSuccess={handleLoginSuccess} 
-          subAccounts={subAccounts}
           isSyncing={isSyncing}
+          scriptUrl={scriptUrl}
+          onSaveUrl={handleSaveSyncUrl}
         />
       </div>
     );
@@ -625,13 +634,11 @@ export default function App() {
         openEntryModal={handleOpenEntryModalDirect}
         openStaffModal={() => setIsStaffModalOpen(true)}
         openSyncModal={() => setIsSyncModalOpen(true)}
-        openSubAccountsModal={() => setIsSubAccountsModalOpen(true)}
         exportCSV={exportCSV}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         isSynced={isSyncing}
         sheetUrlConfigured={!!scriptUrl}
-        userRole={loggedUserRole}
         username={loggedUsername}
         onLogout={handleLogout}
         restaurantName={restaurantName}
@@ -673,23 +680,6 @@ export default function App() {
             <span id="header-today-date-badge" className="hidden sm:inline-block bg-gold-pale border border-gold-light text-gold text-xs font-bold px-4 py-1.5 rounded-full uppercase ml-2 tracking-wide">
               📅 {formatFriendlyDate()} <span className="ml-1 text-navy opacity-80">🕒 {currentTime}</span>
             </span>
-
-            {/* Timezone Switcher control */}
-            <div id="header-timezone-selector-wrap" className="hidden md:flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-full text-xs text-slate-600 font-medium ml-2">
-              <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest shrink-0">TZ:</span>
-              <select
-                id="header-timezone-dropdown"
-                value={timezone}
-                onChange={(e) => handleTimezoneChange(e.target.value)}
-                className="bg-transparent border-none text-navy font-bold focus:outline-none cursor-pointer pr-1 text-xs"
-              >
-                {POPULAR_TIMEZONES.map(pt => (
-                  <option key={pt.value} value={pt.value}>
-                    {pt.name}
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
 
           {/* Quick Action headers inside the Topbar */}
@@ -732,6 +722,7 @@ export default function App() {
               guests={guests}
               onEditGuest={handleEditGuestClick}
               onDeleteGuest={handleDeleteGuest}
+              onUpdateStatus={handleUpdateGuestStatus}
               timezone={activeTz}
             />
           )}
@@ -741,6 +732,9 @@ export default function App() {
               guests={guests}
               onEditGuest={handleEditGuestClick}
               onDeleteGuest={handleDeleteGuest}
+              onUpdateStatus={handleUpdateGuestStatus}
+              onBulkUpdateStatus={handleBulkUpdateGuestStatus}
+              onBulkDeleteGuests={handleBulkDeleteGuests}
             />
           )}
 
@@ -771,6 +765,7 @@ export default function App() {
         staffList={staffList}
         initialType={entryModalInitialType}
         timezone={activeTz}
+        guestsKey={getAccountKey("guests")}
       />
 
       {/* 2. CREW/STAFF manager modal overlay */}
@@ -791,14 +786,7 @@ export default function App() {
         onTestSync={handleTestSync}
       />
 
-      {/* 4. SUB ACCOUNTS manager modal overlay */}
-      <SubAccountsManagerModal
-        isOpen={isSubAccountsModalOpen}
-        onClose={() => setIsSubAccountsModalOpen(false)}
-        subAccounts={subAccounts}
-        onAddSubAccount={handleAddSubAccount}
-        onRemoveSubAccount={handleRemoveSubAccount}
-      />
+
 
     </div>
   );

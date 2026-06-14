@@ -18,6 +18,7 @@ interface EntryModalProps {
   staffList: string[];
   initialType?: "Reservation" | "Walk-In";
   timezone?: string;
+  guestsKey?: string;
 }
 
 export default function EntryModal({
@@ -28,8 +29,11 @@ export default function EntryModal({
   tables,
   staffList,
   initialType = "Reservation",
-  timezone
+  timezone,
+  guestsKey
 }: EntryModalProps) {
+  const storageKey = guestsKey || "guest_rsvp_mngr_guests";
+
   // Local Form States
   const [type, setType] = useState<EntryType>(EntryType.RESERVATION);
   const [name, setName] = useState("");
@@ -128,7 +132,7 @@ export default function EntryModal({
 
     // Call simulated search or search local storage array
     const searchName = name.trim().toLowerCase();
-    const cachedGuestsStr = localStorage.getItem("guest_rsvp_mngr_guests");
+    const cachedGuestsStr = localStorage.getItem(storageKey);
     if (cachedGuestsStr) {
       try {
         const guestList: Guest[] = JSON.parse(cachedGuestsStr);
@@ -163,7 +167,7 @@ export default function EntryModal({
       return;
     }
 
-    const cachedGuestsStr = localStorage.getItem("guest_rsvp_mngr_guests");
+    const cachedGuestsStr = localStorage.getItem(storageKey);
     let guestList: Guest[] = [];
     if (cachedGuestsStr) {
       try {
@@ -233,7 +237,7 @@ export default function EntryModal({
       return;
     }
 
-    const cachedGuestsStr = localStorage.getItem("guest_rsvp_mngr_guests");
+    const cachedGuestsStr = localStorage.getItem(storageKey);
     if (cachedGuestsStr) {
       try {
         const guestList: Guest[] = JSON.parse(cachedGuestsStr);
@@ -287,7 +291,7 @@ export default function EntryModal({
     let isOldPhone = false;
     const cleanPhone = String(phone || "").trim();
     if (cleanPhone) {
-      const cachedGuestsStr = localStorage.getItem("guest_rsvp_mngr_guests");
+      const cachedGuestsStr = localStorage.getItem(storageKey);
       let localMatches = false;
       if (cachedGuestsStr) {
         try {
@@ -499,7 +503,7 @@ export default function EntryModal({
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 font-sans">
               <label className="block text-[10px] font-bold text-[#8a9ab5] uppercase tracking-wider">
                 Table Assignment
               </label>
@@ -509,11 +513,14 @@ export default function EntryModal({
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-navy font-semibold focus:outline-none focus:ring-1 focus:ring-gold focus:border-gold cursor-pointer"
               >
                 <option value="Unassigned">-- Select Table (Auto/Unassigned) --</option>
-                {tables.map((t, index) => (
-                  <option key={index} value={t.name}>
-                    {t.icon} {t.name} (Cap: {t.capacity}) {t.override && " - Blocked"}
-                  </option>
-                ))}
+                {tables
+                  .filter(t => t.override !== "unavailable" || t.name === table)
+                  .map((t, index) => (
+                    <option key={index} value={t.name}>
+                      {t.icon} {t.name} (Cap: {t.capacity})
+                    </option>
+                  ))
+                }
               </select>
             </div>
           </div>
@@ -530,6 +537,8 @@ export default function EntryModal({
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-navy font-semibold focus:outline-none focus:ring-1 focus:ring-gold focus:border-gold cursor-pointer"
               >
                 <option value={RsvpStatus.CONFIRMED}>Confirmed/Reserved</option>
+                <option value={RsvpStatus.ARRIVED}>Arrived</option>
+                <option value={RsvpStatus.DEPARTED}>Departed</option>
                 <option value={RsvpStatus.SEATED}>Seated/Occupied</option>
                 <option value={RsvpStatus.PENDING}>Pending advisory</option>
                 <option value={RsvpStatus.NO_SHOW}>No-Show/Arrived late</option>

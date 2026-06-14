@@ -12,10 +12,11 @@ interface DashboardViewProps {
   guests: Guest[];
   onEditGuest: (guest: Guest) => void;
   onDeleteGuest: (id: string) => void;
+  onUpdateStatus: (id: string, newStatus: RsvpStatus) => void;
   timezone?: string;
 }
 
-export default function DashboardView({ guests, onEditGuest, onDeleteGuest, timezone }: DashboardViewProps) {
+export default function DashboardView({ guests, onEditGuest, onDeleteGuest, onUpdateStatus, timezone }: DashboardViewProps) {
   // Get today's date in YYYY-MM-DD
   const getTodayString = () => {
     return getTodayStringInTimezone(timezone || "UTC");
@@ -36,12 +37,17 @@ export default function DashboardView({ guests, onEditGuest, onDeleteGuest, time
   const todayStr = getTodayString();
   const todayGuests = guests.filter(g => g.date === todayStr);
 
+  const activeTodayGuests = todayGuests.filter(g => g.status !== RsvpStatus.DEPARTED);
+  const activeTodayReservations = activeTodayGuests.filter(g => g.type === EntryType.RESERVATION).length;
+  const activeTodayWalkins = activeTodayGuests.filter(g => g.type === EntryType.WALK_IN).length;
+
   // KPIs calculations
+  const todayReservations = todayGuests.filter(g => g.type === EntryType.RESERVATION).length;
+  const todayWalkins = todayGuests.filter(g => g.type === EntryType.WALK_IN).length;
   const todayCount = todayGuests.length;
   const todayPax = todayGuests.reduce((acc, curr) => acc + (curr.pax || 0), 0);
   const todayConfirmed = todayGuests.filter(g => g.status === RsvpStatus.CONFIRMED).length;
   const todaySeated = todayGuests.filter(g => g.status === RsvpStatus.SEATED).length;
-  const todayWalkins = todayGuests.filter(g => g.type === EntryType.WALK_IN).length;
   const totalAllTime = guests.length;
 
   // Status breakdown calculations (for all reservations or today's, let's look at all-time or today's. Let's do all-time for robust analytics, or today's)
@@ -86,6 +92,10 @@ export default function DashboardView({ guests, onEditGuest, onDeleteGuest, time
         return "bg-orange-50 text-orange-800 border border-orange-200";
       case RsvpStatus.CANCELLED:
         return "bg-rose-50 text-rose-800 border border-rose-200";
+      case RsvpStatus.ARRIVED:
+        return "bg-emerald-600 text-white border border-emerald-750 font-extrabold shadow-3xs";
+      case RsvpStatus.DEPARTED:
+        return "bg-slate-500 text-white border border-slate-600 font-extrabold shadow-3xs";
       default:
         return "bg-slate-50 text-slate-800 border border-slate-200";
     }
@@ -111,17 +121,17 @@ export default function DashboardView({ guests, onEditGuest, onDeleteGuest, time
 
       {/* KPI Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5">
-        {/* Today Entries */}
+        {/* Today Booked Reservations */}
         <div className="bg-white p-5 rounded-2xl border border-gray-150 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-[#8a9ab5] mb-4">
-            <span className="text-xs font-bold uppercase tracking-wider">Today</span>
+            <span className="text-xs font-bold uppercase tracking-wider">Reservations</span>
             <Clipboard className="w-4 h-4 text-navy-soft" />
           </div>
           <div>
             <div className="font-serif text-4xl font-extrabold text-[#0f1f38]">
-              {todayCount}
+              {todayReservations}
             </div>
-            <p className="text-xs text-[#8a9ab5] mt-1 leading-none">Reservations</p>
+            <p className="text-xs text-[#8a9ab5] mt-1 leading-none">Booked RSVPs</p>
           </div>
         </div>
 
@@ -266,11 +276,16 @@ export default function DashboardView({ guests, onEditGuest, onDeleteGuest, time
               Service schedule for today's physical sittings
             </p>
           </div>
-          <span className="px-3.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold rounded-full">
-            {todayGuests.length} active entries
-          </span>
+          <div className="flex flex-wrap gap-2">
+            <span className="px-3.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold rounded-full">
+              📋 {activeTodayReservations} Reservations
+            </span>
+            <span className="px-3.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-full">
+              🚶 {activeTodayWalkins} Walk-ins
+            </span>
+          </div>
         </div>
-
+ 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
@@ -280,14 +295,15 @@ export default function DashboardView({ guests, onEditGuest, onDeleteGuest, time
                 <th className="py-4 px-5">Time</th>
                 <th className="py-4 px-5">Pax</th>
                 <th className="py-4 px-5">Table Assignment</th>
+                <th className="py-4 px-5">Arrive / Depart</th>
                 <th className="py-4 px-5">Service Status</th>
                 <th className="py-4 px-5">Special Notes</th>
                 <th className="py-4 px-5 text-right">Quick Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-150">
-              {todayGuests.length > 0 ? (
-                todayGuests.map(r => (
+              {activeTodayGuests.length > 0 ? (
+                activeTodayGuests.map(r => (
                   <tr
                     key={r.id}
                     className="hover:bg-slate-50/50 transition-colors"
@@ -316,6 +332,32 @@ export default function DashboardView({ guests, onEditGuest, onDeleteGuest, time
                       )}
                     </td>
                     <td className="py-4 px-5">
+                      <div className="inline-flex rounded-lg border border-slate-205 p-0.5 bg-slate-50 gap-0.5 shadow-3xs">
+                        <button
+                          onClick={() => onUpdateStatus(r.id, r.status === RsvpStatus.ARRIVED ? RsvpStatus.CONFIRMED : RsvpStatus.ARRIVED)}
+                          className={`px-2 py-1 text-[10px] font-extrabold rounded-md uppercase tracking-wider transition-all duration-150 cursor-pointer ${
+                            r.status === RsvpStatus.ARRIVED
+                              ? "bg-emerald-600 text-white font-extrabold shadow-3xs"
+                              : "text-slate-500 hover:text-navy hover:bg-slate-100"
+                          }`}
+                          title={r.status === RsvpStatus.ARRIVED ? "Arrived - Click to edit" : "Mark as Arrived"}
+                        >
+                          Arrive
+                        </button>
+                        <button
+                          onClick={() => onUpdateStatus(r.id, r.status === RsvpStatus.DEPARTED ? RsvpStatus.ARRIVED : RsvpStatus.DEPARTED)}
+                          className={`px-2 py-1 text-[10px] font-extrabold rounded-md uppercase tracking-wider transition-all duration-150 cursor-pointer ${
+                            r.status === RsvpStatus.DEPARTED
+                              ? "bg-slate-500 text-white font-extrabold shadow-3xs"
+                              : "text-slate-500 hover:text-navy hover:bg-slate-100"
+                          }`}
+                          title={r.status === RsvpStatus.DEPARTED ? "Departed - Click to edit" : "Mark as Departed"}
+                        >
+                          Depart
+                        </button>
+                      </div>
+                    </td>
+                    <td className="py-4 px-5">
                       <span className={`px-3 py-1 rounded-full text-[11px] font-bold inline-block text-center ${getStatusBadgeClass(r.status)}`}>
                         {r.status}
                       </span>
@@ -335,7 +377,7 @@ export default function DashboardView({ guests, onEditGuest, onDeleteGuest, time
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center">
+                  <td colSpan={9} className="py-12 text-center">
                     <span className="text-3xl block mb-2">🍽️</span>
                     <p className="text-sm text-[#8a9ab5] font-medium">No service reservations scheduled for today</p>
                   </td>

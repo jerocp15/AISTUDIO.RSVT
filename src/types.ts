@@ -8,7 +8,9 @@ export enum RsvpStatus {
   SEATED = "Seated",
   PENDING = "Pending",
   NO_SHOW = "No-Show",
-  CANCELLED = "Cancelled"
+  CANCELLED = "Cancelled",
+  ARRIVED = "Arrived",
+  DEPARTED = "Departed"
 }
 
 export enum EntryType {
